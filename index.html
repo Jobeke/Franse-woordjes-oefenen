@@ -121,6 +121,15 @@ function isCorrect(input, expected){
  if(m){
    const masc=compact(m[1]), fem=compact(m[2]);
    if(c.replace(/[, ]/g,'') === (masc+fem).replace(/[, ]/g,'')) return true;
+
+   // Leerlingnotatie voor mannelijk/vrouwelijk:
+   // prochain(e), cher(e), grand(e), enz.
+   // Bij een verwacht paar "mannelijk, vrouwelijk" aanvaarden we masc(e)
+   // ook wanneer de vrouwelijke vorm een accent- of spellingwijziging heeft.
+   if(c === compact(masc+'(e)')) return true;
+
+   // Als alleen een achtervoegsel verandert, mag dat ook tussen haakjes:
+   // bv. prochain(e).
    if(fem.startsWith(masc)){
      const suffix=fem.slice(masc.length);
      if(c===compact(masc+'('+suffix+')')) return true;
