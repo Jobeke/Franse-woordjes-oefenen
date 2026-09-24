@@ -82,31 +82,52 @@ function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()
 function compact(s){
  return s.normalize('NFC').toLowerCase().trim()
   .replace(/[’‘`´]/g,"'").replace(/\s+/g,' ')
-  .replace(/\s*([,;:/])\s*/g,'$1');
+  .replace(/\s*([,;:/])\s*/g,'$1')
+  .replace(/\s*\(\s*/g,'(').replace(/\s*\)\s*/g,')');
 }
 function optionalVariants(s){
  let out=new Set([s]);
- // Parenthesized text may be typed with or without parentheses, while retaining the text.
  out.add(s.replace(/[()]/g,''));
- // Parenthesized fragments may also be omitted when they are explicitly optional on the card.
  out.add(s.replace(/\s*\([^)]*\)/g,'').replace(/\s+/g,' ').trim());
- // Handle forms like (s')habiller and (s’) amuser.
- out.add(s.replace(/[()]/g,'').replace(/\s+/g,' ').trim());
+ out.add(s.replace(/\s*\(\s*/g,'(').replace(/\s*\)\s*/g,')'));
  return [...out].map(compact);
 }
-function alternatives(s){
- // slash separates alternatives; commas generally represent listed forms/meanings
- let base=[s];
- if(s.includes(' / ')) base.push(...s.split(' / '));
- if(s.includes(' ou ')) base.push(...s.split(' ou '));
- if(s.includes(',')) base.push(...s.split(','));
- let out=new Set();
- base.forEach(x=>optionalVariants(x).forEach(v=>out.add(v)));
- // A few typographic equivalents.
- [...out].forEach(v=>{out.add(v.replace(/œ/g,'oe'));});
+function pairVariants(s){
+ let out=new Set([s]);
+ const m=s.match(/^\s*([^,]+?)\s*,\s*([^,]+?)\s*$/);
+ if(m){
+   const masc=m[1].trim(), fem=m[2].trim();
+   out.add(masc+' '+fem); out.add(masc+fem); out.add(masc+','+fem);
+   if(fem.toLowerCase().startsWith(masc.toLowerCase())){
+     const suffix=fem.slice(masc.length);
+     if(suffix) out.add(masc+'('+suffix+')');
+   }
+ }
  return [...out];
 }
-function isCorrect(input, expected){return alternatives(expected).includes(compact(input));}
+function alternatives(s){
+ let bases=new Set(); pairVariants(s).forEach(x=>bases.add(x));
+ if(s.includes(' / ')) s.split(' / ').forEach(x=>bases.add(x));
+ if(s.includes(' ou ')) s.split(' ou ').forEach(x=>bases.add(x));
+ let out=new Set();
+ bases.forEach(x=>optionalVariants(x).forEach(v=>out.add(v)));
+ [...out].forEach(v=>out.add(v.replace(/œ/g,'oe')));
+ return [...out];
+}
+function isCorrect(input, expected){
+ const c=compact(input);
+ if(alternatives(expected).includes(c)) return true;
+ const m=expected.match(/^\s*([^,]+?)\s*,\s*([^,]+?)\s*$/);
+ if(m){
+   const masc=compact(m[1]), fem=compact(m[2]);
+   if(c.replace(/[, ]/g,'') === (masc+fem).replace(/[, ]/g,'')) return true;
+   if(fem.startsWith(masc)){
+     const suffix=fem.slice(masc.length);
+     if(c===compact(masc+'('+suffix+')')) return true;
+   }
+ }
+ return false;
+}
 function start(){
  const y=$('year').value,m=$('module').value,a=$('acte').value;
  deck=shuffle(DATA[y][m][a].map(x=>({fr:x[0],nl:x[1]}))); hardMode=false;
