@@ -6,7 +6,7 @@
 <style>
 *{box-sizing:border-box} body{font-family:Arial,sans-serif;background:#f3f6f9;margin:0;color:#243447}
 .wrap{max-width:820px;margin:35px auto;padding:0 18px} .card{background:white;border-radius:18px;padding:28px;box-shadow:0 5px 20px #0002}
-h1{margin-top:0;color:#35566f} .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px} label{font-weight:700;font-size:14px}
+h1{margin-top:0;color:#35566f} .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.pick{display:grid;gap:16px}.pickgroup{padding:14px;border:1px solid #dde5ea;border-radius:12px}.checks{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}.check{display:inline-flex;align-items:center;gap:6px;font-weight:400;margin-right:14px}.check input{width:auto;margin:0} label{font-weight:700;font-size:14px}
 select,input{width:100%;padding:12px;border:1px solid #aebbc5;border-radius:10px;font-size:17px;margin-top:6px}
 button{border:0;border-radius:10px;padding:12px 18px;font-size:16px;cursor:pointer;background:#35566f;color:white;font-weight:700}
 button.secondary{background:#e8eef2;color:#243447} .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
@@ -18,11 +18,16 @@ button.secondary{background:#e8eef2;color:#243447} .actions{display:flex;gap:10p
 </style>
 </head><body><div class="wrap"><div class="card">
 <h1>Franse woordjes oefenen</h1>
-<div class="grid">
-<label>Leerjaar<select id="year"><option value="5">5e leerjaar</option><option value="6">6e leerjaar</option></select></label>
-<label>Module<select id="module"></select></label>
-<label>Acte<select id="acte"></select></label>
-<label>Richting<select id="direction"><option value="nlfr">Nederlands → Frans</option><option value="frnl">Frans → Nederlands</option></select></label>
+<div class="pick">
+<div class="pickgroup"><strong>Leerjaar</strong>
+<label class="check"><input type="checkbox" class="yearBox" value="5" checked> 5e leerjaar</label>
+<label class="check"><input type="checkbox" class="yearBox" value="6"> 6e leerjaar</label>
+</div>
+<div class="pickgroup"><strong>Modules</strong><div id="moduleBoxes" class="checks"></div></div>
+<div class="pickgroup"><strong>Richting</strong>
+<label class="check"><input type="checkbox" class="dirBox" value="nlfr" checked> Nederlands → Frans</label>
+<label class="check"><input type="checkbox" class="dirBox" value="frnl"> Frans → Nederlands</label>
+</div>
 </div>
 <div class="actions">
 <button id="start">Start oefenen</button>
@@ -65,18 +70,29 @@ function updateHardInfo(){
 function startHard(){
  const h=Object.values(loadHard());
  if(!h.length){alert('Er zijn nog geen moeilijke woorden om te oefenen.');return}
- deck=shuffle(h.map(x=>({fr:x.fr,nl:x.nl})));
+ const dirs=selectedDirs(); if(!dirs.length){alert('Kies minstens één richting.');return} deck=shuffle(h.map(x=>({fr:x.fr,nl:x.nl,dir:dirs[Math.floor(Math.random()*dirs.length)]})));
  pos=0;good=0;wrong=[];hardMode=true;$('quiz').style.display='block';show();
 }
 
-function refreshModules(){
- const y=$('year').value, mods=Object.keys(DATA[y]).map(Number).sort((a,b)=>a-b);
- $('module').innerHTML=mods.map(m=>`<option value="${m}">Module ${m}</option>`).join('');
- refreshActes();
+function selectedYears(){
+ return [...document.querySelectorAll('.yearBox:checked')].map(x=>x.value);
 }
-function refreshActes(){
- const y=$('year').value,m=$('module').value, acts=Object.keys(DATA[y][m]).map(Number).sort((a,b)=>a-b);
- $('acte').innerHTML=acts.map(a=>`<option value="${a}">Acte ${a}</option>`).join('');
+function selectedDirs(){
+ return [...document.querySelectorAll('.dirBox:checked')].map(x=>x.value);
+}
+function refreshModules(){
+ const years=selectedYears();
+ const box=$('moduleBoxes');
+ const previous=new Set([...document.querySelectorAll('.moduleBox:checked')].map(x=>x.value));
+ let html='';
+ years.forEach(y=>{
+   Object.keys(DATA[y]).map(Number).sort((a,b)=>a-b).forEach(m=>{
+     const key=y+'-'+m;
+     const checked=previous.size ? previous.has(key) : (y==='5' && m===1);
+     html+=`<label class="check"><input type="checkbox" class="moduleBox" value="${key}" ${checked?'checked':''}> L${y} · Module ${m}</label>`;
+   });
+ });
+ box.innerHTML=html || '<span>Kies minstens één leerjaar.</span>';
 }
 function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function compact(s){
@@ -138,9 +154,22 @@ function isCorrect(input, expected){
  return false;
 }
 function start(){
- const y=$('year').value,m=$('module').value,a=$('acte').value;
- deck=shuffle(DATA[y][m][a].map(x=>({fr:x[0],nl:x[1]}))); hardMode=false;
- pos=0;good=0;wrong=[];$('quiz').style.display='block'; show();
+ const mods=[...document.querySelectorAll('.moduleBox:checked')].map(x=>x.value);
+ const dirs=selectedDirs();
+ if(!mods.length){alert('Kies minstens één module.');return}
+ if(!dirs.length){alert('Kies minstens één richting.');return}
+ let items=[];
+ mods.forEach(k=>{
+   const [y,m]=k.split('-');
+   Object.values(DATA[y][m]).forEach(act=>{
+     act.forEach(x=>items.push({fr:x[0],nl:x[1]}));
+   });
+ });
+ // Remove exact duplicates when the same word occurs in selected material.
+ const seen=new Set();
+ items=items.filter(x=>{const k=x.fr+'|||'+x.nl;if(seen.has(k))return false;seen.add(k);return true});
+ deck=shuffle(items.map(x=>({...x,dir:dirs[Math.floor(Math.random()*dirs.length)]})));
+ hardMode=false; pos=0;good=0;wrong=[];$('quiz').style.display='block';show();
 }
 function show(){
  if(pos>=deck.length){
@@ -154,14 +183,14 @@ function show(){
  }
  locked=false;$('answer').style.display='block';$('check').style.display='inline-block';$('next').style.display='none';
  $('answer').value='';$('answer').focus();$('feedback').textContent='';$('feedback').className='feedback';
- const d=$('direction').value, item=deck[pos];
+ const item=deck[pos], d=item.dir || selectedDirs()[0] || 'nlfr';
  $('prompt').textContent=d==='nlfr'?item.nl:item.fr;
  $('progress').textContent=`Woord ${pos+1} van ${deck.length}`;
  $('score').textContent=`Juist: ${good}`;
 }
 function check(){
  if(locked||!$('answer').value.trim()) return;
- locked=true; const item=deck[pos], d=$('direction').value, expected=d==='nlfr'?item.fr:item.nl;
+ locked=true; const item=deck[pos], d=item.dir || selectedDirs()[0] || 'nlfr', expected=d==='nlfr'?item.fr:item.nl;
  if(isCorrect($('answer').value,expected)){
    good++; markRight(item); $('feedback').className='feedback good'; $('feedback').textContent='✓ Juist!';
  } else {
@@ -170,7 +199,7 @@ function check(){
  $('score').textContent=`Juist: ${good}`;$('check').style.display='none';$('next').style.display='inline-block';$('next').focus();
 }
 function next(){pos++;show()}
-$('year').addEventListener('change',refreshModules);$('module').addEventListener('change',refreshActes);
+document.querySelectorAll('.yearBox').forEach(x=>x.addEventListener('change',refreshModules));
 $('start').addEventListener('click',start);$('hardStart').addEventListener('click',startHard);$('check').addEventListener('click',check);$('next').addEventListener('click',next);
 $('answer').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();locked?next():check()}});
 "à â ä æ ç é è ê ë î ï ô ö œ ù û ü ÿ ’".split(' ').forEach(c=>{let b=document.createElement('button');b.type='button';b.textContent=c;b.onclick=()=>{let i=$('answer');let p=i.selectionStart;i.value=i.value.slice(0,p)+c+i.value.slice(i.selectionEnd);i.focus();i.selectionStart=i.selectionEnd=p+c.length};$('accents').appendChild(b)});
